@@ -1,19 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 )
 
 type Pokemon struct {
-	Name   string `json:"name"`
-	Weight int    `json:"weight"`
-	Types  []Type `json:"types"`
-	Stats  []Stat `json:"stats"`
+	Name    string `json:"name"`
+	Weight  int    `json:"weight"`
+	Types   []Type `json:"types"`
+	Stats   []Stat `json:"stats"`
+	Sprites Sprite `json:"sprites"`
 }
 
 type Type struct {
@@ -34,7 +37,25 @@ type StatInfo struct {
 	Name string `json:"name"`
 }
 
+type Sprite struct {
+	FrontDefault string `json:"front_default"`
+}
+
+func downloadSprite(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
+}
+
 func main() {
+	if len(os.Args) < 2 {
+		log.Fatalln("please provide a pokemon name!")
+	}
 
 	pokiName := os.Args[1]
 	api := "https://pokeapi.co/api/v2/pokemon/" + pokiName
@@ -57,7 +78,21 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	fmt.Printf("name: %s\n", poki.Name)
+	sprite, err := downloadSprite(poki.Sprites.FrontDefault)
+	if err != nil {
+		log.Fatalln("failed to download image: ", err)
+	}
+
+	cmd := exec.Command("kitty", "+kitten", "icat")
+	cmd.Stdin = bytes.NewReader(sprite)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("failed to display image: %v", err)
+	}
+
+	fmt.Printf("\nname: %s\n", poki.Name)
 	fmt.Println("types:")
 	for _, t := range poki.Types {
 		fmt.Printf("  - %s\n", t.Type.Name)
